@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <form id="profileUpdateForm" enctype="multipart/form-data">
+        <label>Username:</label>
+        <input type="text" id="username" name="username" required>
+
+        <label>Bio:</label>
+        <textarea id="bio" name="bio"></textarea>
+
+        <label>Profile Picture:</label>
+        <input type="file" id="profileImage" name="profile_image">
+
+        <button type="submit">Update Profile</button>
+    </form>
+
+    <script>
+        document.getElementById("profileUpdateForm").addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            let formData = new FormData(this);
+
+            let response = await fetch("/profile/{{ profile.id }}/update_profile/", {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                }
+            });
+
+            let data = await response.json();
+
+            if (response.ok) {
+                alert("Profile updated successfully!");
+                window.location.reload();
+            } else {
+                alert(data.error || "Something went wrong");
+            }
+        });
+    </script>
+
+
+{% endblock %}
