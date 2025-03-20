@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    <style>
+        .comments-container {
+            max-height: 200px; /* ✅ Set maximum height */
+            overflow-y: auto; /* ✅ Enable vertical scrolling */
+            padding-right: 5px; /* ✅ Prevents horizontal scroll */
+        }
+    </style>
+
+    <div class="container mt-4">
+        <h1>MY POSTS</h1>
+
+        {% for post in posts %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="card-title">{{ post.title }}</h3>
+                    <p class="card-text">{{ post.content }}</p>
+                    <p class="text-muted">By: {{ post.author.user.username }}</p>
+
+                    {% if post.author.user == request.user %}
+                        <a href="{% url 'post-update' post.id %}" class="btn btn-warning btn-sm">Edit</a>
+
+                        <form id="delete-form-{{ post.id }}" method="post" action="{% url 'post-delete' post.id %}"
+                              style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Are you sure you want to delete this post?');">
+                                Delete
+                            </button>
+                        </form>
+
+                    {% endif %}
+                </div>
+
+                <!-- Comments Section -->
+                <div class="card mt-3">
+                    <div class="card-header">Comments</div>
+                    <div class="card-body comments-container" id="comments-section-{{ post.id }}">
+                        {% for comment in post.comments.all %}
+                            <div class="mb-2 comment-item" id="comment-{{ comment.id }}">
+                                <strong>{{ comment.author.username }}</strong>: {{ comment.content }}
+                                <small class="text-muted d-block">{{ comment.created_time }}</small>
+
+                                <!-- Only post author can delete comments -->
+                                {% if post.author == request.user %}
+                                    <button class="btn btn-danger btn-sm deleteComment"
+                                            data-comment-id="{{ comment.id }}"
+                                            data-post-id="{{ post.id }}">
+                                        Delete
+                                    </button>
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            <p>No comments yet. Be the first to comment!</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+
+                <!-- Comment Form (Only for Logged-in Users) -->
+                {% if user.is_authenticated %}
+                    <div class="card mt-3">
+                        <div class="card-body">
+                            <form class="commentForm">
+                                {% csrf_token %}
+                                <textarea id="commentText{{ post.id }}" class="form-control" rows="2"
+                                          placeholder="Write a comment..."></textarea>
+                                <button type="button" class="btn btn-primary mt-2 submitComment"
+                                        data-post-id="{{ post.id }}">Add Comment
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="mt-3">You must <a href="{% url 'login' %}">log in</a> to comment.</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Handle adding comments
+            document.querySelectorAll(".submitComment").forEach(button => {
+                button.addEventListener("click", function () {
+                    let postId = this.getAttribute("data-post-id");
+                    let commentText = document.querySelector(`#commentText${postId}`).value.trim();
+                    let csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+                    if (!commentText) {
+                        alert("Comment cannot be empty!");
+                        return;
+                    }
+
+                    fetch(`/posts/${postId}/add_comment/`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": csrfToken
+                        },
+                        body: JSON.stringify({content: commentText})
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.id) {
+                                const commentsSection = document.querySelector(`#comments-section-${postId}`);
+                                commentsSection.innerHTML += `
+                            <div class="mb-2 comment-item" id="comment-${data.id}">
+                                <strong>${data.author}</strong>: ${data.content}
+                                <small class="text-muted d-block">${data.created_time}</small>
+                                <button class="btn btn-danger btn-sm deleteComment"
+                                        data-comment-id="${data.id}"
+                                        data-post-id="${postId}">
+                                    Delete
+                                </button>
+                            </div>
+                        `;
+                                document.querySelector(`#commentText${postId}`).value = "";
+                                attachDeleteEvent();
+                            } else {
+                                alert("Error: " + JSON.stringify(data));
+                            }
+                        })
+                        .catch(error => {
+                            console.error("Error:", error);
+                            alert("An error occurred: " + error.message);
+                        });
+                });
+            });
+
+            // Attach delete event listener to comments
+            function attachDeleteEvent() {
+                document.querySelectorAll(".deleteComment").forEach(button => {
+                    button.addEventListener("click", function () {
+                        let commentId = this.getAttribute("data-comment-id");
+                        let postId = this.getAttribute("data-post-id");
+                        let csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+                        fetch(`/posts/${postId}/delete_comment/${commentId}/`, {
+                            method: "DELETE",
+                            headers: {
+                                "X-CSRFToken": csrfToken
+                            }
+                        })
+                            .then(response => {
+                                if (!response.ok) throw new Error("Failed to delete comment.");
+                                return response.json();
+                            })
+                            .then(data => {
+                                if (data.success) {
+                                    document.querySelector(`#comment-${commentId}`).remove();
+                                } else {
+                                    alert("Error: " + data.message);
+                                }
+                            })
+                            .catch(error => {
+                                console.error("Error:", error);
+                                alert("An error occurred: " + error.message);
+                            });
+                    });
+                });
+            }
+
+            attachDeleteEvent();
+        });
+    </script>
+
+{% endblock %}

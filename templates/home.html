@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    <style>
+        .comments-container {
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+    </style>
+
+    <div class="container mt-4">
+        <h1>Welcome, {{ request.user.username }}</h1>
+
+        {% for post in posts %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="card-title">{{ post.title }}</h3>
+                    <p class="card-text">{{ post.content }}</p>
+                    <p class="text-muted">By: {{ post.author.user.username }}</p>
+
+                    <!-- ✅ Like Button Section -->
+                    <div class="d-flex align-items-center">
+                        <button type="button"
+                                class="btn {% if post.liked %}btn-primary{% else %}btn-outline-primary{% endif %} like-button"
+                                data-post-id="{{ post.id }}">
+                            <span class="like-text">
+                            {% if post.liked %}
+                                Unlike
+                            {% else %}
+                                Like
+                            {% endif %}
+                            </span> 👍
+                            <span class="like-count">{{ post.likes.count }}</span>
+                        </button>
+
+                    </div>
+                </div>
+
+                <!-- Comments Section -->
+                <div class="card mt-3">
+                    <div class="card-header">Comments</div>
+                    <div class="card-body comments-container" id="comments-section-{{ post.id }}">
+                        {% for comment in post.comments.all %}
+                            <div class="mb-2">
+                                <strong>{{ comment.author.user.username }}</strong>: {{ comment.content }}
+                                <small class="text-muted d-block">{{ comment.created_time }}</small>
+                            </div>
+                        {% empty %}
+                            <p>No comments yet. Be the first to comment!</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Comment Form (Only for Logged-in Users) -->
+                {% if user.is_authenticated %}
+                    <div class="card mt-3">
+                        <div class="card-body">
+                            <form class="commentForm">
+                                {% csrf_token %}
+                                <textarea id="commentText{{ post.id }}" class="form-control" rows="2"
+                                          placeholder="Write a comment..."></textarea>
+                                <button type="button" class="btn btn-primary mt-2 submitComment"
+                                        data-post-id="{{ post.id }}">Add Comment
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="mt-3">You must <a href="{% url 'login' %}">log in</a> to comment or like.</p>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.querySelectorAll(".like-button").forEach(button => {
+                button.addEventListener("click", function () {
+                    let postId = this.getAttribute("data-post-id");
+                    let csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+                    let likeButton = this;
+                    let likeCountSpan = likeButton.querySelector(".like-count");
+                    let likeText = likeButton.querySelector(".like-text");
+
+                    fetch(`/posts/${postId}/like_post/`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": csrfToken
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.liked) {
+                                likeText.textContent = "Unlike";
+                                likeButton.classList.remove("btn-outline-primary");
+                                likeButton.classList.add("btn-primary");
+                            } else {
+                                likeText.textContent = "Like";
+                                likeButton.classList.remove("btn-primary");
+                                likeButton.classList.add("btn-outline-primary");
+                            }
+                            likeCountSpan.textContent = data.likes_count;  // ✅ Update like count dynamically
+                        })
+                        .catch(error => {
+                            console.error("Error:", error);
+                            alert("An error occurred while liking the post.");
+                        });
+                });
+            });
+        });
+
+
+        // ✅ Comment Submission
+        document.querySelectorAll(".submitComment").forEach(button => {
+            button.addEventListener("click", function () {
+                let postId = this.getAttribute("data-post-id");
+                let commentText = document.querySelector(`#commentText${postId}`).value.trim();
+                let csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+                if (!commentText) {
+                    alert("Comment cannot be empty!");
+                    return;
+                }
+
+                fetch(`/posts/${postId}/add_comment/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+                    body: JSON.stringify({content: commentText})
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.id) {
+                            let commentSection = document.querySelector(`#comments-section-${postId}`);
+                            let newComment = document.createElement("div");
+                            newComment.classList.add("mb-2");
+                            newComment.innerHTML = `
+                            <strong>${data.author}</strong>: ${data.content}
+                            <small class="text-muted d-block">Just now</small>
+                        `;
+                            commentSection.appendChild(newComment);
+                            document.querySelector(`#commentText${postId}`).value = "";
+                        } else {
+                            alert("Error: " + JSON.stringify(data));
+                        }
+                    })
+                    .catch(error => alert("An error occurred: " + error.message));
+            });
+        });
+        ;
+    </script>
+
+{% endblock %}
