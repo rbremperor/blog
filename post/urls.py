@@ -23,9 +23,9 @@ profile_update = ProfileViewSet.as_view({'get': 'update_profile', 'post': 'updat
 
 
 urlpatterns = [
-    path('home/', include(router.urls)),
+    path('', include(router.urls)),
     path('register/', register_view, name='register'),
-    path('', home, name='home'),
+    path('home/', home, name='home'),
     path('publish/', post_create, name='post-create'),
     path('posts/<int:pk>/edit/', post_update, name='post-update'),  # Edit URL
     path('posts/<int:pk>/delete/', post_delete, name='post-delete'),

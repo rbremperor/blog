@@ -52,7 +52,7 @@ def logout_view(request):
     return redirect('login')
 
 
-@cache_page(60 * 5)  # Cache for 5 minutes
+ # Cache for 5 minutes
 def home(request):
     user_profile = request.user.profile
     filter_option = request.GET.get("filter", "all")
@@ -66,8 +66,6 @@ def home(request):
             posts = Post.objects.filter(author__in=followed_users)
         else:
             posts = Post.objects.all()
-
-        cache.set(cache_key, posts, timeout=60 * 5)  # Cache for 5 minutes
 
     return render(request, "home.html", {"posts": posts, "filter_option": filter_option})
 
