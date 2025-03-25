@@ -1,5 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from django.conf import settings
+from django.conf.urls.static import static
 
 from .views import register_view, home, PostViewSet, login_view, logout_view, ProfileViewSet
 
@@ -17,11 +19,13 @@ like_post = PostViewSet.as_view({'post': 'like_post'})
 
 profile_detail = ProfileViewSet.as_view({'get': 'retrieve'})
 profile_follow = ProfileViewSet.as_view({'post': 'follow'})
+profile_update = ProfileViewSet.as_view({'get': 'update_profile', 'post': 'update_profile'})
+
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('home/', include(router.urls)),
     path('register/', register_view, name='register'),
-    path('home/', home, name='home'),
+    path('', home, name='home'),
     path('publish/', post_create, name='post-create'),
     path('posts/<int:pk>/edit/', post_update, name='post-update'),  # Edit URL
     path('posts/<int:pk>/delete/', post_delete, name='post-delete'),
@@ -31,5 +35,6 @@ urlpatterns = [
     path('posts/<int:pk>/like/', like_post, name='like_post'),
     path('profile/<int:pk>/', profile_detail, name='profile-detail'),
     path('profile/<int:pk>/follow/', profile_follow, name='profile-follow'),
+    path('profile/<int:pk>/edit/', profile_update, name='profile-edit'),
 
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,5 +1,8 @@
+from django.core.cache import cache
+from django.views.decorators.cache import cache_page
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
+from django.http import HttpResponseForbidden
 
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
@@ -8,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 
 from post.models import Post, Like, Comment, Profile
-from post.forms import RegisterForm, PostForm, LoginForm
+from post.forms import RegisterForm, PostForm, LoginForm, ProfileForm
 from post.serializers import PostSerializer, CommentSerializer, LikeSerializer, ProfileSerializer
 
 
@@ -22,7 +25,6 @@ def register_view(request):
     else:
         form = RegisterForm()
     return render(request, "register.html", {"form": form})
-
 
 
 def login_view(request):
@@ -50,12 +52,24 @@ def logout_view(request):
     return redirect('login')
 
 
+@cache_page(60 * 5)  # Cache for 5 minutes
 def home(request):
-    posts = Post.objects.prefetch_related("comments").all()
-    for post in posts:
-        post.liked = post.likes.filter(author=request.user.profile).exists()
-    return render(request, "home.html", {"posts": posts})
+    user_profile = request.user.profile
+    filter_option = request.GET.get("filter", "all")
 
+    cache_key = f"home_{request.user.id}_{filter_option}"  # Unique key per user/filter
+    posts = cache.get(cache_key)
+
+    if not posts:
+        if filter_option == "following":
+            followed_users = user_profile.following.all()
+            posts = Post.objects.filter(author__in=followed_users)
+        else:
+            posts = Post.objects.all()
+
+        cache.set(cache_key, posts, timeout=60 * 5)  # Cache for 5 minutes
+
+    return render(request, "home.html", {"posts": posts, "filter_option": filter_option})
 
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
@@ -126,9 +140,18 @@ class PostViewSet(viewsets.ModelViewSet):
         """Add a comment (JSON API only)."""
         post = get_object_or_404(Post, pk=pk)
         serializer = CommentSerializer(data=request.data, context={"request": request})
+
         if serializer.is_valid():
-            serializer.save(post=post, author=request.user.profile)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            comment = serializer.save(post=post, author=request.user.profile)
+
+            # Return the response with correct username
+            return Response({
+                "id": comment.id,
+                "author": comment.author.user.username,  # ✅ Explicitly return the username
+                "content": comment.content,
+                "created_time": comment.created_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], renderer_classes=[JSONRenderer])
@@ -163,22 +186,72 @@ class ProfileViewSet(viewsets.ModelViewSet):
     serializer_class = ProfileSerializer
     renderer_classes = (TemplateHTMLRenderer,)
 
-    def retrieve(self, request, pk=None):
-        """Retrieve a single user profile."""
-        profile = get_object_or_404(Profile, user__pk=pk)
-        return render(request, "profile.html", {"profile": profile})
+    def get_serializer_context(self):
+        """Pass request context to serializer for absolute URLs"""
+        return {"request": self.request}
 
-    @action(detail=True, methods=['post'])
+    def retrieve(self, request, pk=None):
+        cache_key = f"profile_{pk}"  # Unique cache key for each profile
+        profile_data = cache.get(cache_key)
+
+        if not profile_data:
+            profile = get_object_or_404(Profile, user__pk=pk)
+            user_profile = request.user.profile if request.user.is_authenticated else None
+            is_owner = user_profile == profile
+            is_following = user_profile.is_following(profile) if user_profile else False
+
+            profile_data = {
+                "profile": profile,
+                "is_owner": is_owner,
+                "is_following": is_following,
+                "followers_count": profile.followers.count(),
+            }
+            cache.set(cache_key, profile_data, timeout=60 * 5)  # Cache for 5 minutes
+
+        # Handle API requests (JSON response)
+        if request.headers.get("Accept") == "application/json":
+            serializer = self.get_serializer(profile_data["profile"])
+            return Response(serializer.data)
+
+        # Handle HTML rendering
+        return render(request, "profile.html", profile_data)
+
+    @action(detail=True, methods=["post"], renderer_classes=[JSONRenderer])
     def follow(self, request, pk=None):
+        """Handles follow/unfollow actions as an API response."""
         user_profile = request.user.profile
         target_profile = get_object_or_404(Profile, pk=pk)
 
+        if user_profile == target_profile:
+            return Response({"error": "You cannot follow yourself"}, status=status.HTTP_400_BAD_REQUEST)
+
         if user_profile.is_following(target_profile):
             user_profile.unfollow(target_profile)
-            return Response({"message": "Unfollowed"}, status=status.HTTP_200_OK)
+            message = "Unfollowed"
+        else:
+            user_profile.follow(target_profile)
+            message = "Followed"
 
-        user_profile.follow(target_profile)
-        return Response({"message": "Followed"}, status=status.HTTP_201_CREATED)
+        return Response({
+            "message": message,
+            "followers_count": target_profile.followers.count(),
+        }, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        return Profile.objects.exclude(user=self.request.user)
+    @action(detail=True, methods=["get", "post"], renderer_classes=[TemplateHTMLRenderer])
+    def update_profile(self, request, pk=None):
+        profile = get_object_or_404(Profile, pk=pk)
+
+        if request.user.profile != profile:
+            return HttpResponseForbidden("You can only update your own profile")
+
+        if request.method == "POST":
+            form = ProfileForm(request.POST, request.FILES, instance=profile)
+            if form.is_valid():
+                form.save()
+                cache.delete(f"profile_{pk}")  # Invalidate cache when profile is updated
+                return redirect("profile-detail", pk=profile.pk)
+
+        else:
+            form = ProfileForm(instance=profile)
+
+        return render(request, "edit_profile.html", {"form": form, "profile": profile, "is_owner": True})

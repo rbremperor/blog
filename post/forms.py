@@ -47,3 +47,14 @@ class PostForm(forms.ModelForm):
 class LoginForm(forms.Form):
     username = forms.CharField(widget=forms.TextInput(attrs={'class': 'form-control'}))
     password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+
+
+class ProfileForm(forms.ModelForm):
+    class Meta:
+        model = Profile
+        fields = ["profile_picture", "bio"]  # Include only editable fields
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["profile_picture"].widget.attrs.update({"class": "form-control"})
+        self.fields["bio"].widget.attrs.update({"class": "form-control", "placeholder": "Tell us about yourself..."})

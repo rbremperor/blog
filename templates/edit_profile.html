@@ -1,43 +1,33 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block content %}
-    <form id="profileUpdateForm" enctype="multipart/form-data">
-        <label>Username:</label>
-        <input type="text" id="username" name="username" required>
+<div class="container mt-4">
+    <h2 class="mb-4">Update Profile</h2>
 
-        <label>Bio:</label>
-        <textarea id="bio" name="bio"></textarea>
+    <form method="POST" enctype="multipart/form-data" class="card p-4 shadow-sm">
+        {% csrf_token %}
 
-        <label>Profile Picture:</label>
-        <input type="file" id="profileImage" name="profile_image">
+        <div class="mb-3 text-center">
+            {% if profile.profile_picture %}
+                <img src="{{ profile.get_profile_picture }}" alt="Profile Picture" class="img-thumbnail mb-3" width="150">
+            {% else %}
+                <p class="text-muted">No profile picture</p>
+            {% endif %}
+            {{ form.profile_picture }}
+        </div>
 
-        <button type="submit">Update Profile</button>
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            {{ form.user.username }}
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Bio</label>
+            {{ form.bio }}
+        </div>
+
+        <button type="submit" class="btn btn-primary">Update</button>
+        <a href="{% url 'profile-detail' profile.pk %}" class="btn btn-secondary">Cancel</a>
     </form>
-
-    <script>
-        document.getElementById("profileUpdateForm").addEventListener("submit", async function (event) {
-            event.preventDefault();
-
-            let formData = new FormData(this);
-
-            let response = await fetch("/profile/{{ profile.id }}/update_profile/", {
-                method: "POST",
-                body: formData,
-                headers: {
-                    "X-CSRFToken": "{{ csrf_token }}",
-                }
-            });
-
-            let data = await response.json();
-
-            if (response.ok) {
-                alert("Profile updated successfully!");
-                window.location.reload();
-            } else {
-                alert(data.error || "Something went wrong");
-            }
-        });
-    </script>
-
-
+</div>
 {% endblock %}

@@ -24,7 +24,7 @@
                         <a class="nav-link" href="{% url 'post-create' %}">Publish Post</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'profile-detail' request.user.id %}">Profile</a>
+                        <a class="nav-link" href="{% url 'profile-detail' request.user.pk %}">Profile</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'logout' %}">Logout</a>
