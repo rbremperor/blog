@@ -2,15 +2,13 @@ services:
   - type: web
     name: blog-django
     runtime: python
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn Blog.wsgi:application"
-    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py migrate
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn Blog.wsgi:application
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: blog-db
-          property: connectionString
+      - key: DJANGO_SETTINGS_MODULE
+        value: Blog.settings
       - key: SECRET_KEY
         generateValue: true
-      - key: DJANGO_SETTINGS_MODULE
-        value: blog.settings.production
