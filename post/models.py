@@ -13,7 +13,7 @@ class Profile(models.Model):
     def get_profile_picture(self):
         if self.profile_picture:
             return self.profile_picture.url
-        return "/static/profile_pictures/default.png"
+        return "/staticfiles/profile_pictures/default.png"
 
     def follow(self, profile):
         self.following.add(profile)
