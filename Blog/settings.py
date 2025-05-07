@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-4g-r3kgb)olwq$+#09xu$vy!5_xt#q79u$xz1(s*gg*&)ey0qw
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['blog-ifp4.onrender.com']
 
 
 # Application definition
@@ -55,6 +55,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+# settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ]
+}
 
 ROOT_URLCONF = 'Blog.urls'
 
